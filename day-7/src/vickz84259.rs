@@ -7,7 +7,9 @@ use std::time::Instant;
 use itertools::Itertools;
 
 type Bags = HashMap<String, BagContents>;
-type Cache<'a> = HashMap<&'a str, bool>;
+
+type BoolCache<'a> = HashMap<&'a str, bool>;
+type NumCache<'a> = HashMap<&'a str, u32>;
 
 #[derive(Debug)]
 struct BagContents {
@@ -42,14 +44,12 @@ impl ops::Index<usize> for BagContents {
         }
 
         let bag_str = self.data.split(",").nth(index).unwrap().trim();
-        let (_, bag_str) = bag_str.split_at(2);
-
         bag_str.split(" bag").nth(0).unwrap().trim()
     }
 }
 
 fn get_bags() -> Bags {
-    let file = File::open("../input2.txt").expect("Unable to open file");
+    let file = File::open("../input.txt").expect("Unable to open file");
     io::BufReader::new(file)
         .lines()
         .filter_map(Result::ok)
@@ -57,15 +57,15 @@ fn get_bags() -> Bags {
         .collect()
 }
 
-fn can_contain<'a, 'b>(cache: &'b mut Cache<'a>, bags: &'a Bags, bag: &'a str) -> bool {
+fn can_contain<'a, 'b>(cache: &'b mut BoolCache<'a>, bags: &'a Bags, bag: &'a str) -> bool {
     if cache.contains_key(bag) {
         return cache[bag];
     }
 
     let contents = &bags[bag];
     let result = (0..contents.length).any(|index| {
-        let inner_bag = &contents[index];
-        inner_bag == "shiny gold" || can_contain(cache, bags, inner_bag)
+        let (_, inner_bag) = &contents[index].split_at(2);
+        *inner_bag == "shiny gold" || can_contain(cache, bags, inner_bag)
     });
 
     cache.insert(bag, result);
@@ -73,7 +73,7 @@ fn can_contain<'a, 'b>(cache: &'b mut Cache<'a>, bags: &'a Bags, bag: &'a str) -
 }
 
 fn part_1(bags: &Bags) {
-    let mut cache: Cache = HashMap::new();
+    let mut cache: BoolCache = HashMap::new();
     let count = bags
         .iter()
         .filter(|entry| can_contain(&mut cache, bags, entry.0))
@@ -82,11 +82,44 @@ fn part_1(bags: &Bags) {
     println!("{} bags can contain shiny gold bag", count);
 }
 
+fn bag_count<'a, 'b>(cache: &'b mut NumCache<'a>, bags: &'a Bags, bag: &'a str) -> u32 {
+    if cache.contains_key(bag) {
+        return cache[bag];
+    }
+
+    let contents = &bags[bag];
+    let result = (0..contents.length)
+        .map(|index| {
+            let (number, inner_bag) = &contents[index].split_at(2);
+            let number: u32 = number.trim().parse().unwrap();
+
+            number + (number * bag_count(cache, bags, inner_bag))
+        })
+        .sum();
+
+    cache.insert(bag, result);
+    result
+}
+
+fn part_2(bags: &Bags) {
+    let mut cache: NumCache = HashMap::new();
+    let count = bag_count(&mut cache, bags, "shiny gold");
+
+    println!("shiny gold bag can contain {} bags", count);
+}
+
 fn main() {
     println!("Part 1: \n----------");
-
-    let start = Instant::now();
     let bags = get_bags();
+
+    let mut start = Instant::now();
     part_1(&bags);
+    println!("Time Taken: {:?}", start.elapsed());
+
+    println!("----------");
+    println!("Part 2: \n----------");
+
+    start = Instant::now();
+    part_2(&bags);
     println!("Time Taken: {:?}", start.elapsed());
 }
